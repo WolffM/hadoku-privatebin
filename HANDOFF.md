@@ -1,137 +1,101 @@
-# Handoff: hadoku-privatebin
+# Handoff: hadoku-privatebin — DONE
 
-Host an upstream PrivateBin at `hadoku.me/privatebin`, for sharing secrets over a
-domain the operator owns and trusts.
+Upstream PrivateBin is live at `hadoku.me/privatebin`, brought up 2026-08-18.
 
-## Read first
+This file is the record of that bring-up: the decisions taken, what the original
+brief predicted correctly, and what it did not. **Operational detail lives in
+`CLAUDE.md`** — read that first if you are changing the service rather than
+auditing how it got here.
 
-- `../hadoku_site/CLAUDE.md` — platform rules. Not optional.
-- `../hadoku_site/docs/child-apps/TUNNEL_APP_BRINGUP.md` — the host bring-up
-  sequence. Follow it top to bottom; the ordering gotchas in it cost several
-  iterations on the first proxy app.
-- `../hadoku_site/docs/child-apps/CHECKLIST_privatebin.md` — generated.
+## Status
 
-## Do not fork PrivateBin
+| Piece                                          | State                                     |
+| ---------------------------------------------- | ----------------------------------------- |
+| Shim (gate, edge-auth, prefix strip, theming)  | shipped, CI green, 27 tests               |
+| PrivateBin 2.0.6 container                     | running, pinned by digest, stock image    |
+| cloudflared ingress + DNS                      | `privatebin.hadoku.me` live               |
+| Vault: `EDGE_AUTH_SECRET` grant                | granted to the service key                |
+| Monitoring probe                               | sees the service                          |
+| Push-to-deploy                                 | verified: rebuilds and restarts the shim  |
 
-Run the upstream image (`privatebin/nginx-fpm-alpine`) in Docker and configure
-it. This is a deliberate decision, not laziness: the entire job of this service
-is holding other people's secrets, and a fork means every upstream CVE becomes a
-merge somebody has to notice and do. Theme it through PrivateBin's own template
-and CSS hooks if you theme it at all.
+## Decisions taken
 
-This repo holds the **proxy shim** and the deployment config. It does not hold
-PHP.
+The brief left four things open. They were settled by the operator:
 
-## Shape
+- **`sizelimit` = 16 MiB.** Usable payload ~12 MB after base64 overhead; less for
+  already-compressed input, where zlib wins nothing back.
+- **Discussion OFF.** This is load-bearing, not cosmetic — see below.
+- **Light hadoku theming plus an honest size notice**, done via injection rather
+  than a forked template.
+- **Full bring-up to live**, rather than staging behind an unresolvable hostname.
 
-```
-browser → edge-router → cloudflared → shim :9005 → privatebin container :8090
-```
+## The brief's one wrong prediction
 
-The shim is already scaffolded (`src/`). The edge route, tier row, atlas rows,
-PM2 wrapper, deploy-config entry and monitoring probe are already wired and
-merged in hadoku_site.
+> "Expect the subpath to be the hard part."
 
-The edge forwards `/privatebin` and `/privatebin/*` **unchanged — no
-stripPrefix.** The shim, not the edge, decides what is UI and what is backend.
+It was not. Under `/privatebin/` it came to two things: strip the prefix (the
+scaffolded `_pb` demux is for backends that serve their own prefixed routes, and
+PrivateBin serves only from its docroot), and 301 the bare prefix, because its
+templates reference assets relatively and `/privatebin` resolves them at the site
+root. Half a day of the estimate went unspent.
 
-## The one thing you must get right
+**The actual risk was in the sentence the brief treated as settled**: read the
+tier off `X-Hadoku-Tier`, because `proxy.ts` re-stamps it under the `X-Edge-Auth`
+seal. That is true of the header. It was not true of this repo — the scaffold
+came from the plain `tunnel.proxy` template, which never *verifies* that seal.
+`privatebin.hadoku.me` is a public hostname, so until `src/edge-auth.ts` existed,
+anyone could have reached the shim directly with `X-Hadoku-Tier: friend` and
+created pastes. The gate the brief correctly insisted on would have been
+decorative.
 
-**Reading a paste is public. Creating one is friend+.**
+If you are bringing up a sibling from the same template — `hadoku-filetransfer`
+is scaffolded identically and has the same public-read/gated-write shape — **that
+is the thing to check first.** `templates/tunnel-contained` in hadoku_site has
+the pattern; `templates/tunnel-proxy` does not.
 
-Those are the same path with different methods (`GET /?pasteid=…` reads,
-`POST /` creates), and the edge tier manifest is **path-only** —
-`RouteTier` in `../hadoku_site/workers/edge-router/src/route-tiers.ts` has no
-`method` field. The split therefore *cannot* be expressed at the edge, and
-`/privatebin` is registered there as `public` so that a recipient holding a link
-can actually open it.
+## What the gate rests on
 
-**So the shim is the gate.** It must reject a create from anyone below friend.
+Classified from PrivateBin 2.0.6's own `lib/Request.php`, not from documentation:
+POST, PUT and DELETE all route to `create`; every read arrives as a GET;
+unrecognised methods deny. Burn-after-reading deletes server-side *inside* the
+read (`Model/Paste::get`), so an anonymous recipient never needs a mutating
+method — which is what makes classifying on method alone correct.
 
-Read the tier off the `X-Hadoku-Tier` request header. That header is
-trustworthy on a public route: `authGate` resolves the caller's tier whether or
-not a tier rule matched, and `proxy.ts` deletes any client-supplied value before
-re-stamping the real one under the `X-Edge-Auth` seal. This is the same
-arrangement promptsmith uses — "the app does not rely on the edge gate".
+**Enabling discussion breaks that**, because commenting is a POST an anonymous
+recipient legitimately makes. If discussion is ever turned on, `src/gate.ts` has
+to be revisited in the same change.
 
-Get this wrong and you have published an open paste service on a domain that
-carries the operator's name. Test it explicitly, signed out, with curl.
+## Verified, signed out, against the live URL
 
-Which methods/paths constitute "create" is for you to determine from the running
-PrivateBin — do not guess from this document. PrivateBin's API is
-POST-to-root-with-JSON, but verify against the version you deploy, and default
-to **deny** for anything you cannot classify.
+Read is public: UI loads, bare prefix redirects, a paste link opens with no key.
+Create is friend+: signed-out POST/PUT/DELETE all 403, and a **direct hit on the
+tunnel forging `friend` and forging `admin` with a bad seal** both 403.
+Authed create returns a link that opens signed out. Burn-after-reading burns on
+first read. Password and attachment controls present, discussion absent. A 5 MB
+attachment round-trips in 1.8s; 30 MB returns a clean 413 naming the real
+ceiling. Preview policy still `none`.
 
-## Configuration
+## Two fixes made beyond the brief
 
-In `cfg/conf.php` (mounted into the container, not baked):
+- **`traffic.header = X_USER_ID`.** Every request reaches the container from
+  127.0.0.1, so PrivateBin's rate limiter would have treated every friend as one
+  client and one person pasting would have locked out everyone else.
+- **Edge-router said "GPU host may be offline"** for PrivateBin — hydration
+  seeded the string from a GPU-app template, and it surfaced on a real failure.
+  Fixed in hadoku_site (`workers/edge-router/src/index.ts`).
 
-- `fileupload = true` — off by default upstream. This is what makes small
-  friend-to-friend file sharing work.
-- `sizelimit` — the default is 10 MB and it covers the paste **and** its
-  attachment together. Attachments are base64'd into the paste body, so ~25-33%
-  of whatever you set is overhead, and the browser does the encrypt in memory.
-  Realistic usable payload is well under the number you configure.
-- PHP `memory_limit` wants roughly **2×** the upload size, and nginx
-  `client_max_body_size` has to agree. If they disagree, large uploads fail as
-  an OOM or a 413 rather than a clean message — there is no pre-upload size
-  check upstream (PrivateBin issues #95, #406, #601, #858).
-- Keep password protection and burn-after-reading available; they are the
-  features the operator asked for by name.
+## Left open
 
-**Set expectations honestly in the UI**: this is good for configs, keys,
-screenshots and small archives. It is not a video-file transfer. That job
-belongs to `hadoku-filetransfer`.
-
-## Expect the subpath to be the hard part
-
-Neither PrivateBin nor its nginx config documents subdirectory hosting, and
-everything here must live under `/privatebin/`. Budget real time for this; it is
-the integration risk, not the config. The shim can rewrite where it must — that
-is why there's a shim and a `nativeSubpath` (`/_pb`) rather than a bare proxy.
-
-## Preview policy: leave it alone
-
-`/privatebin` is registered `'none'` in `../hadoku_site/spec/preview-policy.ts`
-and must stay that way. A link preview is a fetch by a third party the sender
-never chose — Discord, Slack and iMessage all scrape a pasted URL before a human
-opens it. Any card at all announces to every hop in the chat chain that this
-particular link is a secret worth intercepting. Do not "improve" this by adding
-a title.
-
-## Hard constraints
-
-- **No `.env` files.** Secrets come from the vault via the PM2 wrapper
-  (`../hadoku_site/services/pm2/privatebin-wrapper.mjs`) and `.devvault.json`
-  locally.
-- **Never run raw `pm2`.** Use the mgmt-api endpoints.
-- **CI must not say `runs-on: ubuntu-latest`.** Use
-  `${{ fromJSON(vars.CI_RUNNER || '["self-hosted","hadoku-builder"]') }}`.
-- **This repo is PUBLIC.** A `pull_request` job on a self-hosted runner needs an
-  `author_association` guard (see the pattern in hadoku_site's CLAUDE.md). Never
-  skip the job on a guard — a skipped required check never reports and the PR
-  can never merge.
-- **Name your CI job `check`** — it is seeded as the required status context in
-  `../hadoku_site/scripts/admin/repo-policy-manifest.json`.
-
-## Workflow
-
-Work in a worktree, never the main checkout. Commit, don't stash.
-
-## Done means
-
-- `pnpm check` green. That job name is this repo's REQUIRED status context —
-  branch protection is already on and requires it, so a rename breaks merging.
-- Run it the way CI does before pushing, not the way your shell is warmed up:
-  `rm -rf node_modules && pnpm install --frozen-lockfile && pnpm check`.
-  Three defects in this repo survived a passing `pnpm check` and died on exactly
-  that command: a `lint` script with no eslint installed, an eslint config with
-  no `fetch` in its globals (so it failed on the shim's own /health probe), and
-  `ERR_PNPM_IGNORED_BUILDS` from pnpm 11 refusing to skip esbuild's build script.
-  All three are fixed; the habit is what matters.
-- Signed out: opening a paste link works; `POST` to create is refused.
-- Signed in as friend: creating works, and the returned link opens signed out.
-- Password-protected and burn-after-reading pastes both behave.
-- A ~5 MB attachment round-trips; something far larger fails with a message
-  rather than a hang.
-- The monitoring probe sees the service (`privatebin.hadoku.me/health`).
+- **`services/pm2/privatebin-wrapper.mjs` is hand-edited** to pass
+  `EDGE_AUTH_SECRET`. Re-running hydration drops that line, and the shim silently
+  becomes read-only if it does. Noted in the file's own header.
+- **Back up `data/`.** It is the only state that matters, it holds the encrypted
+  blobs and the ServerSalt, and it is gitignored (it was not — committing it
+  would have published both).
+- **Checklist cleanup not done**: `templates/privatebin-tunnel/` and
+  `docs/child-apps/CHECKLIST_privatebin.md` in hadoku_site are the checklist's own
+  post-verification deletions. Skipped because other agents had live worktrees
+  there; harmless to leave, safe to delete when that tree is quiet.
+- **Upgrades are manual and deliberate**: `docker pull`, bump the digest in
+  `docker-compose.yml`, `docker compose up -d`. Push-to-deploy rebuilds only the
+  shim and never touches the container.
