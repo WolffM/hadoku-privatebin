@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.log
+
+# Service-tier vault key (mode 0600) — minted per-repo, NEVER committed.
+.devvault.local.json

@@ -1,0 +1,38 @@
+name: Redeploy on hadoku-site
+
+# Lives in the CHILD repo (WolffM/hadoku-privatebin). On push to main, ask
+# hadoku_site to redeploy the `privatebin` PM2 service. hadoku_site's
+# redeploy-service.yml (repository_dispatch: redeploy_service) runs on the
+# self-hosted pm2-host runner and delegates to mgmt-api:
+#   git pull -> pnpm install && pnpm build -> pm2 restart privatebin
+#
+# Requires repo secret HADOKU_SITE_TOKEN (PAT with `repo` scope on
+# WolffM/hadoku_site). Set for all child repos with:
+#   python3 scripts/administration.py github-secrets child-repos
+#
+# NOTE: this only redeploys the proxy shim. The local backend it fronts is
+# managed out-of-band on the host and is untouched by this workflow.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dispatch-redeploy:
+    # Self-hosted by default; `vars.CI_RUNNER` is the on-demand escape hatch
+    # and mgmt-api flips it to hosted automatically if every claw is offline.
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","hadoku-builder"]') }}
+    steps:
+      - name: Trigger redeploy_service on hadoku_site
+        env:
+          TOKEN: ${{ secrets.HADOKU_SITE_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/WolffM/hadoku_site/dispatches \
+            -d "$(jq -n --arg sha "${GITHUB_SHA}" \
+                  '{event_type:"redeploy_service", client_payload:{service:"privatebin", sha:$sha}}')"
+          echo "Dispatched redeploy_service for 'privatebin' (sha ${GITHUB_SHA})"
