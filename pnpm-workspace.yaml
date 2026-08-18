@@ -1,0 +1,9 @@
+# pnpm 11 refuses to silently skip a dependency's build script: `pnpm install`
+# exits ERR_PNPM_IGNORED_BUILDS for anything not listed here, which fails CI at
+# the install step before a single check runs. esbuild arrives via tsx.
+#
+# Renamed from the legacy `onlyBuiltDependencies` array in pnpm 11 — this is a
+# package -> boolean map and the old key is no longer read. Manage with
+# `pnpm approve-builds`; hadoku_site's own pnpm-workspace.yaml uses the same key.
+allowBuilds:
+  esbuild: true

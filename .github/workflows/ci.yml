@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The job name is load-bearing: `check` is this repo's REQUIRED status context,
+  # seeded in hadoku_site/scripts/admin/repo-policy-manifest.json. Rename the job
+  # and branch protection waits forever on a context that never reports.
+  check:
+    # PUBLIC repo on self-hosted runners: a fork PR must not execute
+    # attacker-controlled code on a machine on the LAN. Guard by
+    # author_association — GitHub computes it, so it cannot be spoofed — and pick
+    # a DIFFERENT RUNNER rather than skipping. A skipped required check never
+    # reports, which leaves the PR unmergeable forever.
+    runs-on: >-
+      ${{ (github.event_name != 'pull_request' ||
+           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                    github.event.pull_request.author_association))
+          && fromJSON(vars.CI_RUNNER || '["self-hosted","hadoku-builder"]')
+          || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # corepack, pinned by package.json "packageManager". Not pnpm/action-setup,
+      # whose self-installer shares one directory across every runner instance on
+      # the host and dies with `ENOENT ... uv_cwd` when concurrent jobs race it.
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.5.0 --activate
+
+      - name: Configure .npmrc for GitHub Packages
+        run: |
+          echo "@wolffm:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.HADOKU_SITE_TOKEN }}" >> .npmrc
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Check
+        run: pnpm check
