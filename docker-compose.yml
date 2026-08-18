@@ -1,0 +1,73 @@
+# PrivateBin container — UNFORKED upstream image, configured from cfg/.
+#
+# The whole job of this service is holding other people's secrets, so it runs
+# the upstream image and nothing else. A fork would turn every upstream CVE into
+# a merge somebody has to notice and perform; a `docker pull` + `up -d` is the
+# entire patch process instead. Nothing in this repo contains PHP.
+#
+# This container is NOT managed by PM2 and is NOT redeployed by the push-to-main
+# workflow — that only rebuilds the shim. It is host state, started once here.
+services:
+  privatebin:
+    # Pinned by digest, not by `:latest`. For a service holding secrets, "what
+    # is running" has to be answerable months later, and a floating tag makes a
+    # silent substitution possible between a `pull` and a restart. Bump this
+    # deliberately: `docker pull privatebin/nginx-fpm-alpine:<tag>` then paste
+    # the new digest here, so the upgrade is a reviewable diff.
+    image: privatebin/nginx-fpm-alpine:2.0.6@sha256:d7b99b621dde8e129e8d474370be5e5bb5f961e5013bd12e416c3ff8058b8316
+    container_name: privatebin
+    restart: unless-stopped
+
+    # Run as the host user that owns ./data, keeping the group the image's own
+    # www-data (82) so php-fpm and nginx still share what they expect. The image
+    # already runs unprivileged as nobody:www-data; the only thing that changes
+    # is which uid owns the pastes on the host — which is what makes ./data
+    # readable for backup without root, and writable without chowning it to a
+    # uid the operator cannot manage.
+    user: '1000:82'
+
+    # LOOPBACK ONLY. The shim is the gate (read is public, create is friend+),
+    # so the container must not be reachable except through it. Binding
+    # 0.0.0.0 here would publish an ungated paste service on the LAN.
+    ports:
+      - '127.0.0.1:8090:8080'
+
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+    volumes:
+      # Paste storage. PrivateBin's Filesystem model writes here; this is the
+      # only state that matters and the only thing worth backing up.
+      - ./data:/srv/data
+
+      # Config, mounted rather than baked, so changing sizelimit or the notice
+      # is a restart and not an image rebuild.
+      - ./cfg/conf.php:/srv/cfg/conf.php:ro
+
+      # PHP + nginx limits. These must agree with `sizelimit` in conf.php or a
+      # large upload dies as an OOM or a bare 413 instead of a clean message —
+      # PrivateBin has no pre-upload size check (upstream #95, #406, #601, #858).
+      - ./cfg/php-limits.ini:/etc/php/conf.d/zz-privatebin.ini:ro
+      - ./cfg/nginx-limits.conf:/etc/nginx/server.d/privatebin.conf:ro
+
+    # read_only:true means every writable path has to be declared — nginx, php-fpm
+    # and the entrypoint all need scratch space. Note /run rather than /var/run:
+    # /var/run is a symlink to it, and php-fpm's socket lands there.
+    # `exec` on /run is required, not cosmetic: docker mounts tmpfs noexec by
+    # default, and the s6 supervisor writes its per-service run scripts under
+    # /run and then EXECS them. Without it every service dies at startup with a
+    # bare "unable to spawn ./run: Permission denied".
+    tmpfs:
+      - /tmp:mode=1777
+      - /run:exec,mode=1777
+      - /var/lib/nginx/tmp:mode=1777
+      - /var/lib/nginx/logs:mode=1777
+      - /var/log/nginx:mode=1777
+
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

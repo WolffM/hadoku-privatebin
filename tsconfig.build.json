@@ -1,0 +1,5 @@
+{
+	"//": "Build config. The base tsconfig deliberately INCLUDES the tests so `pnpm typecheck` covers them, but they must not be emitted into dist/ — PM2 runs dist/index.js and the shipped artifact should contain only what the service runs.",
+	"extends": "./tsconfig.json",
+	"exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

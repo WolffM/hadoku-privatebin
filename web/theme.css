@@ -1,0 +1,69 @@
+/*
+ * hadoku theme for PrivateBin — injected by the shim, not by a forked template.
+ *
+ * The container runs stock privatebin/nginx-fpm-alpine. src/index.ts appends one
+ * <link> to the HTML shell on its way past, so upstream can be patched with a
+ * `docker pull` and nothing here has to be re-merged. That is the whole reason
+ * this file is CSS and not a copy of tpl/bootstrap5.php.
+ *
+ * Two constraints this file has to respect:
+ *
+ *  - PrivateBin sets `style-src 'self'` in its CSP meta tag (the `cspheader`
+ *    key in cfg/conf.php). This file is same-origin under /privatebin/, so it
+ *    loads; an inline <style> would not.
+ *  - It is injected LAST in <head>, after bootstrap and privatebin.css, so
+ *    plain specificity wins. No !important is needed and none is used.
+ *
+ * Colours are literals rather than @wolffm/themes tokens on purpose: this
+ * document is rendered by PHP inside a container with no access to the
+ * platform's stylesheet pipeline. Deliberately few, so the drift surface stays
+ * small.
+ */
+
+:root {
+	--hadoku-accent: #ffcc00;
+	--hadoku-ink: #1c1c1e;
+	--hadoku-muted: #6c757d;
+}
+
+/* Navbar: PrivateBin's default is stock bootstrap, which reads as a stranger's
+   app on a domain carrying the operator's name. */
+.navbar {
+	border-bottom: 2px solid var(--hadoku-accent);
+}
+
+.navbar-brand {
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+/* The size-expectations notice (the `notice` key in cfg/conf.php). PrivateBin
+   renders it above the editor; make it read as information rather than as an
+   error, which is bootstrap's default weight for that slot. */
+#notice,
+.alert-info {
+	border-left: 3px solid var(--hadoku-accent);
+	font-size: 0.9375rem;
+}
+
+/* Primary actions — "New document" / "Send" drive the whole flow, so they take
+   the accent. Everything else stays stock bootstrap. */
+.btn-primary {
+	background-color: var(--hadoku-accent);
+	border-color: var(--hadoku-accent);
+	color: var(--hadoku-ink);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+	background-color: #e6b800;
+	border-color: #e6b800;
+	color: var(--hadoku-ink);
+}
+
+/* Footer attribution — quieter, so the paste is the loudest thing on screen. */
+footer,
+#attribution {
+	color: var(--hadoku-muted);
+	font-size: 0.8125rem;
+}

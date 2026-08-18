@@ -4,3 +4,8 @@ dist/
 
 # Service-tier vault key (mode 0600) — minted per-repo, NEVER committed.
 .devvault.local.json
+
+# Paste storage (docker-compose bind mount). Encrypted blobs plus PrivateBin's
+# ServerSalt live here — never committed, and the directory is owned by the
+# container's user (65534:82), not by the operator.
+data/

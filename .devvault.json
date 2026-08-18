@@ -1,6 +1,9 @@
 {
-  "// comment": "Maps env-var name -> vault key. Loaded by ../hadoku_site/scripts/secrets/dev-vault.mjs and read by services/pm2/privatebin-wrapper.mjs in hadoku_site. Values fetched at runtime, never committed. No tier key arrays: the shim trusts edge-router for tier resolution (it forwards X-User-Key/X-User-Id untouched). `key-generate --repo ../hadoku-privatebin` grants this repo's service key ACL rows for exactly these keys.",
+  "// comment": "Maps env-var name -> vault key. Loaded by ../hadoku_site/scripts/secrets/dev-vault.mjs and read by services/pm2/privatebin-wrapper.mjs in hadoku_site. Values fetched at runtime, never committed. No tier key arrays: the shim trusts edge-router for tier resolution (it forwards X-User-Key/X-User-Id untouched, and verifies provenance via EDGE_AUTH_SECRET). `key-generate --repo ../hadoku-privatebin` grants this repo's service key ACL rows for exactly these keys.",
 
   "PRIVATEBIN_PORT": "PRIVATEBIN_PORT",
-  "PRIVATEBIN_BACKEND_URL": "PRIVATEBIN_BACKEND_URL"
+  "PRIVATEBIN_BACKEND_URL": "PRIVATEBIN_BACKEND_URL",
+
+  "// EDGE_AUTH_SECRET": "Shared secret edge-router stamps as X-Edge-Auth. The shim believes X-Hadoku-Tier ONLY when it matches — privatebin.hadoku.me is directly reachable, so without this anyone could claim friend tier and create pastes. Unset = fail closed (read-only). Same key conjure and pygmalion declare.",
+  "EDGE_AUTH_SECRET": "EDGE_AUTH_SECRET"
 }

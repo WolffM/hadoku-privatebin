@@ -6,13 +6,14 @@
   "description": "Self-hosted PrivateBin for encrypted secret and file sharing",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint:fix": "eslint src --fix",
-    "check": "pnpm lint && pnpm typecheck"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "test": "vitest run"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -28,6 +29,8 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.6.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
-  }
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@11.5.0"
 }
