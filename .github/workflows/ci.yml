@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual re-run. Without this there is no way to retrigger CI without an empty
+  # commit — which matters when a run is orphaned rather than failed (a runner
+  # restarted mid-job leaves GitHub showing in_progress until the timeout).
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
