@@ -71,6 +71,13 @@ export const CONFIG = {
 	maxBodyBytes: parseInt(process.env.PRIVATEBIN_MAX_BODY_BYTES || String(20 * 1024 * 1024), 10),
 
 	/**
+	 * How much of an oversized body the shim will read and discard so it can
+	 * still deliver a 413 the client actually receives. Past this it gives up
+	 * and closes, accepting the ugly failure over an unbounded read.
+	 */
+	maxDrainBytes: parseInt(process.env.PRIVATEBIN_MAX_DRAIN_BYTES || String(64 * 1024 * 1024), 10),
+
+	/**
 	 * Upstream timeout (ms). Covers the whole upload of a large attachment, not
 	 * just the handshake. Default 2 min — PrivateBin does the crypto in the
 	 * browser, so the server side is a plain body write.

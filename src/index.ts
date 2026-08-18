@@ -121,16 +121,40 @@ app.use((req, res, next) => {
 // through to nginx, which is the backstop rather than the front door.
 app.use((req, res, next) => {
 	const declared = Number(req.headers['content-length']);
-	if (Number.isFinite(declared) && declared > CONFIG.maxBodyBytes) {
-		const { body, contentType } = tooLargeBody(
-			isJsonApiCall(req.headers as Record<string, unknown>),
-			CONFIG.sizeLimitBytes
-		);
-		console.warn(`[privatebin] refused ${req.method} ${req.path} — body ${declared}B over cap`);
-		res.status(413).type(contentType).set('Connection', 'close').send(body);
+	if (!Number.isFinite(declared) || declared <= CONFIG.maxBodyBytes) {
+		next();
 		return;
 	}
-	next();
+	const { body, contentType } = tooLargeBody(
+		isJsonApiCall(req.headers as Record<string, unknown>),
+		CONFIG.sizeLimitBytes
+	);
+	console.warn(`[privatebin] refused ${req.method} ${req.path} — body ${declared}B over cap`);
+
+	// Answering before the client has finished sending is what makes this a
+	// RESET rather than a reply: the peer is still writing, its write fails, and
+	// the message never gets read. Edge-router turned exactly that into a
+	// "backend may be offline" 500 for a request the backend was never going to
+	// see. So drain first and reply at end-of-body, the same lingering-close
+	// dance nginx does — the upload is wasted either way; this only decides
+	// whether the person is told why.
+	let drained = 0;
+	const reply = () => {
+		if (!res.headersSent) res.status(413).type(contentType).send(body);
+	};
+	req.on('data', (chunk: { length: number }) => {
+		drained += chunk.length;
+		// Past the point where a courteous reply is still worth the bandwidth,
+		// stop reading. A client this far over its own Content-Length is not
+		// waiting for prose.
+		if (drained > CONFIG.maxDrainBytes) {
+			console.warn(`[privatebin] drain cap hit at ${drained}B — closing`);
+			res.status(413).type(contentType).set('Connection', 'close').send(body);
+			req.destroy();
+		}
+	});
+	req.on('end', reply);
+	req.on('error', () => res.destroy());
 });
 
 /** Inject our stylesheet last in <head> so it wins the cascade. */
