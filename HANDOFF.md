@@ -120,7 +120,15 @@ Work in a worktree, never the main checkout. Commit, don't stash.
 
 ## Done means
 
-- `pnpm check` green.
+- `pnpm check` green. That job name is this repo's REQUIRED status context —
+  branch protection is already on and requires it, so a rename breaks merging.
+- Run it the way CI does before pushing, not the way your shell is warmed up:
+  `rm -rf node_modules && pnpm install --frozen-lockfile && pnpm check`.
+  Three defects in this repo survived a passing `pnpm check` and died on exactly
+  that command: a `lint` script with no eslint installed, an eslint config with
+  no `fetch` in its globals (so it failed on the shim's own /health probe), and
+  `ERR_PNPM_IGNORED_BUILDS` from pnpm 11 refusing to skip esbuild's build script.
+  All three are fixed; the habit is what matters.
 - Signed out: opening a paste link works; `POST` to create is refused.
 - Signed in as friend: creating works, and the returned link opens signed out.
 - Password-protected and burn-after-reading pastes both behave.
