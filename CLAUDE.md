@@ -7,15 +7,25 @@ holds the proxy shim and the deployment config. It contains no PHP.
 
 ```
 browser → edge-router (hadoku.me/privatebin/*) → privatebin.hadoku.me tunnel
-        → privatebin shim (this repo, localhost:9005)
+        → privatebin shim (this repo, 127.0.0.1:9005)
         → privatebin container (127.0.0.1:8090, docker-compose.yml)
 ```
 
 | Piece              | Owned by      | Notes                                                |
 | ------------------ | ------------- | ---------------------------------------------------- |
-| Reverse-proxy shim | **this repo** | The gate. The only thing cloudflared exposes.        |
+| Reverse-proxy shim | **this repo** | The gate. Loopback-only; cloudflared is the one way in. |
 | PrivateBin 2.0.6   | upstream      | `privatebin/nginx-fpm-alpine`, pinned by digest.     |
 | Paste storage      | host disk     | `./data`, bind-mounted. Gitignored. Back this up.    |
+
+## The shim binds loopback, like the container
+
+`app.listen` binds `127.0.0.1:9005` (`CONFIG.bindHost`), not `0.0.0.0` — the
+same posture as the container's `127.0.0.1:8090`. cloudflared runs on-box and
+reaches the shim over loopback, so nothing else needs a route in, and the tunnel
+stays the only path to the gate. The shim fails closed to read-only without a
+valid edge seal, so a wider bind was never an open hole — but there is no reason
+to publish it LAN-wide either. Set `PRIVATEBIN_BIND_HOST` only if cloudflared
+runs off-box.
 
 ## Do not fork PrivateBin
 
