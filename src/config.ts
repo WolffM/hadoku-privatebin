@@ -19,6 +19,16 @@ export const CONFIG = {
 	port: parseInt(process.env.PRIVATEBIN_PORT || '9005', 10),
 
 	/**
+	 * Interface the shim binds. Loopback by default, matching the container's
+	 * own `127.0.0.1:8090` posture: cloudflared runs on this host and reaches
+	 * the shim over loopback, so nothing else needs a route in. Binding 0.0.0.0
+	 * would publish the shim LAN-wide — it fails closed to read-only without an
+	 * edge seal so that is not a hole, but there is no reason to widen the
+	 * surface past the tunnel. Override only if cloudflared runs off-box.
+	 */
+	bindHost: process.env.PRIVATEBIN_BIND_HOST || '127.0.0.1',
+
+	/**
 	 * The PrivateBin container this shim proxies to. It binds 127.0.0.1 only —
 	 * the shim is the only thing cloudflared exposes, and the shim is the gate.
 	 */

@@ -240,8 +240,8 @@ app.use((req, res, next) => {
 	(shell ? htmlProxy : streamProxy)(req, res, next);
 });
 
-app.listen(CONFIG.port, () => {
-	console.log(`[privatebin] shim listening on :${CONFIG.port}`);
+app.listen(CONFIG.port, CONFIG.bindHost, () => {
+	console.log(`[privatebin] shim listening on ${CONFIG.bindHost}:${CONFIG.port}`);
 	console.log(`[privatebin] ${CONFIG.basePrefix}/* -> ${CONFIG.backendUrl} (prefix stripped)`);
 	console.log(`[privatebin] create requires tier >= ${CREATE_MIN_TIER}; read is public`);
 	if (CONFIG.edgeAuthSecret === '') {
