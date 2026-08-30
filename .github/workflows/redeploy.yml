@@ -22,7 +22,7 @@ jobs:
   dispatch-redeploy:
     # Self-hosted by default; `vars.CI_RUNNER` is the on-demand escape hatch
     # and mgmt-api flips it to hosted automatically if every claw is offline.
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","hadoku-builder"]') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER) }}
     steps:
       - name: Trigger redeploy_service on hadoku_site
         env:
