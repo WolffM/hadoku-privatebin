@@ -33,24 +33,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
+      - uses: WolffM/hadoku-actions/setup-pnpm@v1
         with:
-          node-version: '22'
-
-      # corepack, pinned by package.json "packageManager". Not pnpm/action-setup,
-      # whose self-installer shares one directory across every runner instance on
-      # the host and dies with `ENOENT ... uv_cwd` when concurrent jobs race it.
-      - name: Enable pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@11.5.0 --activate
-
-      - name: Configure .npmrc for GitHub Packages
-        run: |
-          echo "@wolffm:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.HADOKU_NPM_READ_TOKEN }}" >> .npmrc
+          npm-token: ${{ secrets.HADOKU_NPM_READ_TOKEN }}
 
       - name: Install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.HADOKU_NPM_READ_TOKEN }}
         run: pnpm install --frozen-lockfile
 
       - name: Check
