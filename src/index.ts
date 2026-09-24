@@ -105,11 +105,11 @@ app.use((req, res, next) => {
 		next();
 		return;
 	}
-	const { body, contentType } = refusalBody(isJsonApiCall(headers));
+	const { body, contentType, status } = refusalBody(isJsonApiCall(headers));
 	console.warn(
 		`[privatebin] refused ${req.method} ${req.path} — tier=${tier} < ${CREATE_MIN_TIER}`
 	);
-	res.status(403).type(contentType).send(body);
+	res.status(status).type(contentType).send(body);
 });
 
 // ── Body size ───────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ app.use((req, res, next) => {
 		next();
 		return;
 	}
-	const { body, contentType } = tooLargeBody(
+	const { body, contentType, status } = tooLargeBody(
 		isJsonApiCall(req.headers as Record<string, unknown>),
 		CONFIG.sizeLimitBytes
 	);
@@ -140,7 +140,7 @@ app.use((req, res, next) => {
 	// whether the person is told why.
 	let drained = 0;
 	const reply = () => {
-		if (!res.headersSent) res.status(413).type(contentType).send(body);
+		if (!res.headersSent) res.status(status).type(contentType).send(body);
 	};
 	req.on('data', (chunk: { length: number }) => {
 		drained += chunk.length;
@@ -149,7 +149,7 @@ app.use((req, res, next) => {
 		// waiting for prose.
 		if (drained > CONFIG.maxDrainBytes) {
 			console.warn(`[privatebin] drain cap hit at ${drained}B — closing`);
-			res.status(413).type(contentType).set('Connection', 'close').send(body);
+			res.status(status).type(contentType).set('Connection', 'close').send(body);
 			req.destroy();
 		}
 	});

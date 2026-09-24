@@ -83,14 +83,38 @@ export function mayProceed(method: string, tier: string): boolean {
 /**
  * PrivateBin's own error envelope (`Controller::_json_error`), so a refusal
  * renders as a real message in the UI instead of a generic failure.
+ *
+ * THE STATUS CODE IS PART OF THE ENVELOPE, and getting it wrong silently undid
+ * the sentence above. PrivateBin's client posts with `$.ajax(...).fail(...)`
+ * (privatebin.js), and jQuery routes EVERY non-2xx into `.fail`, where the
+ * handler has the message enum and not the body — so a 403 carrying a perfect
+ * explanation renders as "Could not create document: server error or not
+ * responding". A customer hit exactly that on 2026-09-23 and reported a server
+ * outage; the server was healthy and had answered with the reason.
+ *
+ * So a JSON-API refusal answers 200, which is what it is impersonating:
+ * `Controller::_json_error` sets `status: 1` + `message` and never touches the
+ * HTTP code, so upstream signals application errors in the body at 200. A
+ * NON-JSON caller — curl, a script, a monitor — still gets the honest 4xx,
+ * because nothing there is going to parse `status` and everything there reads
+ * the code. Returning the code with the body keeps the two from drifting apart
+ * again.
  */
-export function refusalBody(isJsonApi: boolean): { body: string; contentType: string } {
+export function refusalBody(isJsonApi: boolean): {
+	body: string;
+	contentType: string;
+	status: number;
+} {
 	const message =
 		'Creating a document on this PrivateBin requires a hadoku.me friend account. ' +
 		'Reading a document you have a link for does not — that stays public.';
 	return isJsonApi
-		? { body: JSON.stringify({ status: 1, message }), contentType: 'application/json' }
-		: { body: message + '\n', contentType: 'text/plain; charset=utf-8' };
+		? {
+				body: JSON.stringify({ status: 1, message }),
+				contentType: 'application/json',
+				status: 200,
+			}
+		: { body: message + '\n', contentType: 'text/plain; charset=utf-8', status: 403 };
 }
 
 /**
@@ -99,9 +123,13 @@ export function refusalBody(isJsonApi: boolean): { body: string; contentType: st
  * and what the person actually has is a file, which base64 inflates ~33% before
  * it is ever encrypted.
  */
-export function tooLargeBody(isJsonApi: boolean, sizeLimitBytes: number): {
+export function tooLargeBody(
+	isJsonApi: boolean,
+	sizeLimitBytes: number
+): {
 	body: string;
 	contentType: string;
+	status: number;
 } {
 	const usableMb = Math.floor((sizeLimitBytes / (1024 * 1024)) * 0.75);
 	const message =
@@ -109,8 +137,12 @@ export function tooLargeBody(isJsonApi: boolean, sizeLimitBytes: number): {
 		'original file, because attachments are base64-encoded before they are encrypted. ' +
 		'For anything bigger use hadoku.me/filetransfer.';
 	return isJsonApi
-		? { body: JSON.stringify({ status: 1, message }), contentType: 'application/json' }
-		: { body: message + '\n', contentType: 'text/plain; charset=utf-8' };
+		? {
+				body: JSON.stringify({ status: 1, message }),
+				contentType: 'application/json',
+				status: 200,
+			}
+		: { body: message + '\n', contentType: 'text/plain; charset=utf-8', status: 413 };
 }
 
 /**

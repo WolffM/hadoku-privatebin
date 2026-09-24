@@ -9,6 +9,7 @@ import {
 	tierAtLeast,
 	isReadMethod,
 	isJsonApiCall,
+	refusalBody,
 	tooLargeBody,
 	CREATE_MIN_TIER,
 } from '../gate.js';
@@ -156,5 +157,45 @@ describe('oversize refusal', () => {
 	it('falls back to plain text for a non-API caller', () => {
 		const { contentType } = tooLargeBody(false, 16 * 1024 * 1024);
 		expect(contentType).toContain('text/plain');
+	});
+});
+
+/**
+ * The status code is the half that decides whether anyone READS the message.
+ *
+ * PrivateBin's client posts with `$.ajax(...).fail(...)`, and jQuery sends every
+ * non-2xx into `.fail`, whose handler holds the generic error enum rather than
+ * the response body. So a refusal that is correct in every other respect still
+ * reaches the person as "Could not create document: server error or not
+ * responding" if it carries a 4xx. That is not hypothetical: a customer
+ * reported a server outage on 2026-09-23 against a healthy server that had
+ * already answered with the reason.
+ */
+describe('a refusal the UI can actually render', () => {
+	it('answers a JSON-API refusal with 200, the way Controller::_json_error does', () => {
+		const r = refusalBody(true);
+		expect(r.status).toBe(200);
+		expect(JSON.parse(r.body)).toMatchObject({ status: 1 });
+		expect(JSON.parse(r.body).message).toMatch(/friend account/);
+	});
+
+	it('still answers a NON-JSON caller with 403 — curl and monitors read the code', () => {
+		const r = refusalBody(false);
+		expect(r.status).toBe(403);
+		expect(r.contentType).toMatch(/text\/plain/);
+	});
+
+	it('applies the same split to a too-large body: 200 for the API, 413 otherwise', () => {
+		expect(tooLargeBody(true, 10 * 1024 * 1024).status).toBe(200);
+		expect(tooLargeBody(false, 10 * 1024 * 1024).status).toBe(413);
+	});
+
+	it('never signals an application error in the HTTP code AND the envelope at once', () => {
+		// Belt and braces: whenever the body carries PrivateBin's `status: 1`,
+		// the HTTP code must be 200, or the body is unreachable to the client.
+		for (const r of [refusalBody(true), tooLargeBody(true, 1024 * 1024)]) {
+			expect(JSON.parse(r.body).status).toBe(1);
+			expect(r.status).toBe(200);
+		}
 	});
 });
