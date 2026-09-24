@@ -9,3 +9,8 @@ dist/
 # ServerSalt live here — never committed, and the directory is owned by the
 # container's user (65534:82), not by the operator.
 data/
+
+# A symlink named node_modules is NOT matched by "node_modules/" — that trailing
+# slash matches directories only, which is how a self-referential symlink got
+# committed in 82a4860. Match the bare name too.
+node_modules
