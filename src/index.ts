@@ -65,7 +65,25 @@ app.get('/health', async (_req, res) => {
 // Runs before everything below, so no later handler ever sees a tier header
 // that did not come through edge-router. Order is the security property here.
 app.use((req, _res, next) => {
-	sanitizeHeaders(req.headers as Record<string, unknown>, EDGE_AUTH);
+	// WHY, not just WHAT. `tier=public` has three causes that look identical
+	// downstream and need three different fixes: the request never came through
+	// edge-router (no seal), it came through an edge whose EDGE_AUTH_SECRET does
+	// not match ours (seal present, rejected — a config split that silently
+	// downgrades EVERY authenticated caller), or the caller really is anonymous.
+	// On 2026-09-23 a friend-tier customer was refused and the log said only
+	// `tier=public < friend`, which is consistent with all three, so the incident
+	// was diagnosed by inference instead of by reading. Capture the seal's fate
+	// BEFORE sanitizeHeaders deletes the header it is judged on.
+	const headers = req.headers as Record<string, unknown>;
+	const sealPresent = typeof headers['x-edge-auth'] === 'string';
+	const claimedTier = typeof headers['x-hadoku-tier'] === 'string' ? headers['x-hadoku-tier'] : null;
+	const vouched = sanitizeHeaders(headers, EDGE_AUTH);
+	(req as unknown as Record<string, unknown>).edgeProvenance = !vouched
+		? sealPresent
+			? 'seal-rejected'
+			: 'no-seal'
+		: 'verified';
+	(req as unknown as Record<string, unknown>).claimedTier = claimedTier;
 	next();
 });
 
@@ -106,8 +124,19 @@ app.use((req, res, next) => {
 		return;
 	}
 	const { body, contentType, status } = refusalBody(isJsonApiCall(headers));
+	const prov = (req as unknown as Record<string, unknown>).edgeProvenance ?? 'unknown';
+	const claimed = (req as unknown as Record<string, unknown>).claimedTier ?? null;
+	// `seal-rejected` is the one that means OUR misconfiguration rather than the
+	// caller's: the edge vouched for somebody and we could not read the voucher.
+	const hint =
+		prov === 'seal-rejected'
+			? ' — EDGE_AUTH_SECRET DISAGREES WITH edge-router; every authenticated caller is being downgraded'
+			: prov === 'no-seal'
+				? ' — request did not traverse edge-router (direct to the tunnel hostname)'
+				: '';
 	console.warn(
-		`[privatebin] refused ${req.method} ${req.path} — tier=${tier} < ${CREATE_MIN_TIER}`
+		`[privatebin] refused ${req.method} ${req.path} — tier=${tier} < ${CREATE_MIN_TIER} ` +
+			`(provenance=${String(prov)}, tier-claimed=${claimed === null ? 'none' : String(claimed)})${hint}`
 	);
 	res.status(status).type(contentType).send(body);
 });
