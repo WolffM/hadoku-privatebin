@@ -78,10 +78,18 @@ rate-limit every friend on the platform.
 
 ## Deploy
 
-Push to `main` → `.github/workflows/redeploy.yml` → mgmt-api runs
-`git pull && pnpm install && pnpm build && pm2 restart privatebin`.
-**Only the shim is rebuilt.** The container is host state: change `cfg/*` or the
-image digest and run `docker compose up -d` on the host yourself.
+Push to `main` → `.github/workflows/redeploy.yml` → mgmt-api syncs and builds
+the shim in its deploy clone, `/home/hadoku/srv/hadoku-privatebin`, and restarts
+it. **Only the shim is rebuilt.** The container is host state: change `cfg/*` or
+the image digest, let the deploy land it in the clone, then run
+`docker compose up -d` **in `/home/hadoku/srv/hadoku-privatebin`** yourself.
+
+**Never `docker compose up` from `~/repos/hadoku-privatebin`.** Since 2026-10-21
+(hadoku-fleet-manager#43) the container, its `data/` (every paste) and the
+`cfg/` it mounts live in the deploy clone. The compose project name comes from
+the directory name, which is the same in both places, so compose run from the
+dev checkout would RECREATE the live container against `~/repos` — an empty
+`data/` there, and every paste reads as gone.
 
 ## Vault
 

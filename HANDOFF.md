@@ -97,5 +97,6 @@ ceiling. Preview policy still `none`.
   post-verification deletions. Skipped because other agents had live worktrees
   there; harmless to leave, safe to delete when that tree is quiet.
 - **Upgrades are manual and deliberate**: `docker pull`, bump the digest in
-  `docker-compose.yml`, `docker compose up -d`. Push-to-deploy rebuilds only the
+  `docker-compose.yml`, `docker compose up -d` — run in the deploy clone
+  `/home/hadoku/srv/hadoku-privatebin`, never `~/repos` (see AGENTS.md "Deploy"). Push-to-deploy rebuilds only the
   shim and never touches the container.
