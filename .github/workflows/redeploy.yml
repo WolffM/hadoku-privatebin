@@ -6,9 +6,10 @@ name: Redeploy on hadoku-site
 # self-hosted pm2-host runner and delegates to mgmt-api:
 #   git pull -> pnpm install && pnpm build -> pm2 restart privatebin
 #
-# Requires repo secret HADOKU_SITE_TOKEN (PAT with `repo` scope on
-# WolffM/hadoku_site). Set for all child repos with:
-#   python3 scripts/administration.py github-secrets child-repos
+# The dispatch goes through mgmt-api with this repo's own service key
+# (KEY_SERVICE_PRIVATEBIN, via hadoku-actions/repo-action): mgmt-api derives the repo
+# from the key and only redeploys a service deploy-config.json maps to it.
+# A refused or unanswered notify FAILS the job.
 #
 # NOTE: this only redeploys the proxy shim. The local backend it fronts is
 # managed out-of-band on the host and is untouched by this workflow.
@@ -27,18 +28,12 @@ jobs:
       - name: Mark the start, so the reported duration is real
         run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
 
-      - name: Trigger redeploy_service on hadoku_site
-        env:
-          TOKEN: ${{ secrets.HADOKU_SITE_TOKEN }}
-        run: |
-          set -euo pipefail
-          curl -fsS -X POST \
-            -H "Authorization: token ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/WolffM/hadoku_site/dispatches \
-            -d "$(jq -n --arg sha "${GITHUB_SHA}" \
-                  '{event_type:"redeploy_service", client_payload:{service:"privatebin", sha:$sha}}')"
-          echo "Dispatched redeploy_service for 'privatebin' (sha ${GITHUB_SHA})"
+      - name: Ask hadoku_site to redeploy privatebin
+        uses: WolffM/hadoku-actions/repo-action@v1
+        with:
+          verb: notify
+          body: '{"event_type":"redeploy_service","client_payload":{"service":"privatebin","sha":"${{ github.sha }}"}}'
+          service-key: ${{ secrets.KEY_SERVICE_PRIVATEBIN }}
 
       # A red run is seen by nobody unless it says so itself: nothing polls
       # these repos. `always()` so RECOVERIES report too -- without the success
