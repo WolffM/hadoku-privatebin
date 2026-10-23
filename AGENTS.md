@@ -85,7 +85,7 @@ the image digest, let the deploy land it in the clone, then run
 `docker compose up -d` **in `/home/hadoku/srv/hadoku-privatebin`** yourself.
 
 **Never `docker compose up` from `~/repos/hadoku-privatebin`.** Since 2026-10-21
-(hadoku-fleet-manager#43) the container, its `data/` (every paste) and the
+(hadoku-fleet-manager-private#43) the container, its `data/` (every paste) and the
 `cfg/` it mounts live in the deploy clone. The compose project name comes from
 the directory name, which is the same in both places, so compose run from the
 dev checkout would RECREATE the live container against `~/repos` — an empty
