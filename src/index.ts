@@ -25,10 +25,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { CONFIG } from './config.js';
 import { sanitizeHeaders, effectiveTier } from './edge-auth.js';
+import { readCommit, probeBackend, healthResponse } from './health.js';
 import { mayProceed, refusalBody, tooLargeBody, isJsonApiCall, CREATE_MIN_TIER } from './gate.js';
 
 // dist/index.js -> repo root, so `web/` resolves whatever the working directory.
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+
+/** The sha this process runs, read once at startup (health.ts). */
+const COMMIT = readCommit(REPO_ROOT);
+if (COMMIT.commit === null) console.warn(`[privatebin] ${COMMIT.commit_error}`);
 
 const EDGE_AUTH = {
 	secret: CONFIG.edgeAuthSecret,
@@ -45,20 +50,10 @@ app.disable('x-powered-by');
 // ── Health (public; never proxied, never gated) ─────────────────────────────
 // Probes the container so monitoring can tell "shim up, backend down" from
 // "shim down". The monitoring probe hits this directly, without an edge seal.
+// Shape: the hadoku health contract, see health.ts.
 app.get('/health', async (_req, res) => {
-	let backend: 'up' | 'down' = 'down';
-	try {
-		const r = await fetch(`${CONFIG.backendUrl}/`, { signal: AbortSignal.timeout(3000) });
-		backend = r.ok ? 'up' : 'down';
-	} catch {
-		backend = 'down';
-	}
-	res.status(backend === 'up' ? 200 : 503).json({
-		status: backend === 'up' ? 'healthy' : 'degraded',
-		service: 'privatebin-tunnel',
-		backend,
-		timestamp: new Date().toISOString(),
-	});
+	const { status, body } = healthResponse(COMMIT, await probeBackend(CONFIG.backendUrl));
+	res.status(status).json(body);
 });
 
 // ── Edge provenance ─────────────────────────────────────────────────────────
