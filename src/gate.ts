@@ -40,17 +40,33 @@
  * reason to POST and the method alone would stop classifying the request.
  */
 
-/** Canonical ordering, mirrored from hadoku_site workers/shared/auth.ts. */
+/**
+ * Canonical ordering, mirrored from hadoku_site workers/shared/auth.ts
+ * (`TIER_RANK`). `member` is a self-signed-up account, between public and
+ * friend. COMPLETE: every tier the platform assigns must be named here, or an
+ * unknown name ranks as public via the `?? TIER_RANK.public` fallbacks below.
+ */
 export const TIER_RANK: Record<string, number> = {
 	public: 0,
-	friend: 1,
-	service: 2,
-	wife: 3,
-	admin: 4,
+	member: 1,
+	friend: 2,
+	service: 3,
+	wife: 4,
+	admin: 5,
 };
 
 /** Minimum tier permitted to create (or otherwise mutate) a paste. */
-export const CREATE_MIN_TIER = 'friend';
+export const CREATE_MIN_TIER: string = 'friend';
+
+/**
+ * Hardcoded, not configurable — but still asserted once at import, so a future
+ * edit that renames or misspells `CREATE_MIN_TIER` fails loudly instead of
+ * quietly ranking as public (every unknown name does) and opening create to
+ * everyone.
+ */
+if (!(CREATE_MIN_TIER in TIER_RANK) || CREATE_MIN_TIER === 'public') {
+	throw new Error(`CREATE_MIN_TIER=${CREATE_MIN_TIER} is not a known, non-public tier`);
+}
 
 /**
  * Methods that can only ever read. Everything else is treated as a mutation,

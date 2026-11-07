@@ -12,6 +12,7 @@ import {
 	refusalBody,
 	tooLargeBody,
 	CREATE_MIN_TIER,
+	TIER_RANK,
 } from '../gate.js';
 import { sanitizeHeaders, effectiveTier, ctEqual } from '../edge-auth.js';
 
@@ -40,6 +41,14 @@ describe('creating is friend+', () => {
 		expect(mayProceed('POST', tier)).toBe(true);
 	});
 
+	it('refuses a member — create is friend+, below the self-signed-up tier', () => {
+		// member sits between public and friend on the platform ladder
+		// (hadoku_site workers/shared/auth.ts TIER_RANK). Create here stays
+		// friend+, so a member is refused exactly like public.
+		expect(mayProceed('POST', 'member')).toBe(false);
+		expect(tierAtLeast('member', CREATE_MIN_TIER)).toBe(false);
+	});
+
 	it.each(['PUT', 'DELETE'])('gates %s too — PrivateBin routes it as create', (method) => {
 		// Request.php sets operation='create' for POST, PUT and DELETE alike,
 		// downgrading to 'delete' only on a body carrying pasteid+deletetoken.
@@ -62,6 +71,70 @@ describe('creating is friend+', () => {
 	it('is case-insensitive about the method', () => {
 		expect(mayProceed('post', 'public')).toBe(false);
 		expect(mayProceed('get', 'public')).toBe(true);
+	});
+});
+
+describe('the ladder is complete', () => {
+	it('ranks every platform tier, member included, strictly above the one below it', () => {
+		expect(TIER_RANK).toMatchObject({ public: 0, member: 1, friend: 2 });
+		expect(TIER_RANK.member).toBeGreaterThan(TIER_RANK.public);
+		expect(TIER_RANK.friend).toBeGreaterThan(TIER_RANK.member);
+	});
+});
+
+describe('CREATE_MIN_TIER is asserted at import, in a real process', () => {
+	// CREATE_MIN_TIER is a hardcoded constant, not an env-configurable floor, so
+	// there is no variable to set; instead a patched copy of gate.ts is imported
+	// in a fresh child process via tsx, to prove the assertion really fires at
+	// module-eval time and really exits non-zero — not just that the thrown
+	// message looks right when called in-process.
+	async function bootWithPatchedTier(badTier: string): Promise<{ status: number | null; stderr: string }> {
+		const fs = await import('node:fs/promises');
+		const os = await import('node:os');
+		const path = await import('node:path');
+		const { fileURLToPath } = await import('node:url');
+		const { spawnSync } = await import('node:child_process');
+
+		const gateSrc = await fs.readFile(
+			path.join(path.dirname(fileURLToPath(import.meta.url)), '../gate.ts'),
+			'utf8'
+		);
+		const patched = gateSrc.replace(
+			"export const CREATE_MIN_TIER: string = 'friend';",
+			`export const CREATE_MIN_TIER: string = '${badTier}';`
+		);
+		if (badTier !== 'friend') expect(patched).not.toBe(gateSrc); // the replace must have matched
+
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'privatebin-gate-boot-'));
+		const file = path.join(dir, 'gate.ts');
+		await fs.writeFile(file, patched, 'utf8');
+		try {
+			const r = spawnSync(
+				process.execPath,
+				['--import', 'tsx', '--input-type=module', '-e', `await import(${JSON.stringify(file)});`],
+				{ encoding: 'utf8' }
+			);
+			return { status: r.status, stderr: r.stderr };
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+	}
+
+	it('exits non-zero, naming the bad value, for public', async () => {
+		const r = await bootWithPatchedTier('public');
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toMatch(/CREATE_MIN_TIER=public is not a known, non-public tier/);
+	});
+
+	it('exits non-zero for a name the ladder does not know', async () => {
+		const r = await bootWithPatchedTier('members');
+		expect(r.status).not.toBe(0);
+		expect(r.stderr).toMatch(/CREATE_MIN_TIER=members is not a known, non-public tier/);
+	});
+
+	it('boots clean at the real, unpatched friend floor', async () => {
+		const r = await bootWithPatchedTier('friend');
+		expect(r.status).toBe(0);
 	});
 });
 
