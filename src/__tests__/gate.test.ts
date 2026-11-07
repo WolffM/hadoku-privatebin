@@ -37,17 +37,18 @@ describe('creating is friend+', () => {
 		expect(mayProceed('POST', 'public')).toBe(false);
 	});
 
-	it.each(['friend', 'service', 'wife', 'admin'])('allows %s to create', (tier) => {
-		expect(mayProceed('POST', tier)).toBe(true);
-	});
-
-	it('refuses a member — create is friend+, below the self-signed-up tier', () => {
-		// member sits between public and friend on the platform ladder
-		// (hadoku_site workers/shared/auth.ts TIER_RANK). Create here stays
-		// friend+, so a member is refused exactly like public.
-		expect(mayProceed('POST', 'member')).toBe(false);
-		expect(tierAtLeast('member', CREATE_MIN_TIER)).toBe(false);
-	});
+	// Derived from TIER_RANK itself, not a hand-typed list: every non-public
+	// tier the ladder names is asserted, including `member` (refused — create
+	// stays friend+) — and a tier added to the ladder later is covered here
+	// without anyone editing this test.
+	it.each(Object.keys(TIER_RANK).filter((t) => t !== 'public'))(
+		'create at tier %s matches CREATE_MIN_TIER',
+		(tier) => {
+			const want = TIER_RANK[tier] >= TIER_RANK[CREATE_MIN_TIER];
+			expect(mayProceed('POST', tier)).toBe(want);
+			expect(tierAtLeast(tier, CREATE_MIN_TIER)).toBe(want);
+		}
+	);
 
 	it.each(['PUT', 'DELETE'])('gates %s too — PrivateBin routes it as create', (method) => {
 		// Request.php sets operation='create' for POST, PUT and DELETE alike,
