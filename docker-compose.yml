@@ -5,8 +5,11 @@
 # a merge somebody has to notice and perform; a `docker pull` + `up -d` is the
 # entire patch process instead. Nothing in this repo contains PHP.
 #
-# This container is NOT managed by PM2 and is NOT redeployed by the push-to-main
-# workflow — that only rebuilds the shim. It is host state, started once here.
+# PM2 runs this file as `privatebin-backend` (hadoku_site
+# services/pm2/privatebin-backend-wrapper.mjs): `up -d` on start, `down` on stop.
+# A push to main that changes this file or cfg/ restarts it after the shim
+# deploy (deploy-config `restartCompanions`, hadoku_site#534), which recreates
+# the container from the new definition. ./data survives every recreate.
 services:
   privatebin:
     # Pinned by digest, not by `:latest`. For a service holding secrets, "what

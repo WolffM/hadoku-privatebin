@@ -80,9 +80,14 @@ rate-limit every friend on the platform.
 
 Push to `main` → `.github/workflows/redeploy.yml` → mgmt-api syncs and builds
 the shim in its deploy clone, `/home/hadoku/srv/hadoku-privatebin`, and restarts
-it. **Only the shim is rebuilt.** The container is host state: change `cfg/*` or
-the image digest, let the deploy land it in the clone, then run
-`docker compose up -d` **in `/home/hadoku/srv/hadoku-privatebin`** yourself.
+it. The container is the PM2 service `privatebin-backend`, a compose unit over
+this repo's `docker-compose.yml` in that clone (hadoku_site
+`services/pm2/privatebin-backend-wrapper.mjs`). A push that changes
+`docker-compose.yml` or `cfg/` also restarts it after the shim
+(deploy-config `restartCompanions`, hadoku_site#534) — a recreate, so a new
+digest or cfg file is live when the deploy goes green, and a backend that does
+not come back fails the deploy. By hand: `POST /api/privatebin-backend/restart`
+through mgmt-api, never raw pm2 or docker.
 
 **Never `docker compose up` from `~/repos/hadoku-privatebin`.** Since 2026-10-21
 (hadoku-fleet-manager-private#43) the container, its `data/` (every paste) and the

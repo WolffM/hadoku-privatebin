@@ -96,7 +96,6 @@ ceiling. Preview policy still `none`.
   `docs/child-apps/CHECKLIST_privatebin.md` in hadoku_site are the checklist's own
   post-verification deletions. Skipped because other agents had live worktrees
   there; harmless to leave, safe to delete when that tree is quiet.
-- **Upgrades are manual and deliberate**: `docker pull`, bump the digest in
-  `docker-compose.yml`, `docker compose up -d` — run in the deploy clone
-  `/home/hadoku/srv/hadoku-privatebin`, never `~/repos` (see AGENTS.md "Deploy"). Push-to-deploy rebuilds only the
-  shim and never touches the container.
+- **Upgrades are deliberate**: `docker pull`, bump the digest in
+  `docker-compose.yml`, push. Since hadoku_site#534 the deploy recreates the
+  container when that file or `cfg/` changed (see AGENTS.md "Deploy").
