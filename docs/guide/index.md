@@ -32,6 +32,8 @@ front of it. The shim's one job that matters is a split the platform's edge
 cannot express on its own: the same URL answers reads for anyone with a
 link, but only a signed-in friend account may create a new paste.
 
+![The paste editor: expiry, burn-after-reading, a password field, file attachment and a format picker, themed to match the rest of hadoku.me](images/privatebin-create.webp)
+
 - [Features](features.md): what a visitor and a friend-tier creator can
   each do.
 - [Contributing](contributing.md): running it locally, the shim's layout,
@@ -44,6 +46,6 @@ link, but only a signed-in friend account may create a new paste.
 
 PrivateBin itself is never patched here: upgrading it is a `docker pull`
 and a digest bump in `docker-compose.yml`'s pinned `image:` line
-(`docker-compose.yml:22`), nothing more — the entire point of running it
+(`docker-compose.yml:22`), nothing more. The entire point of running it
 unforked is that an upstream CVE is a routine pull, not a merge someone has
 to notice and perform ([contributing](contributing.md#how-it-deploys)).

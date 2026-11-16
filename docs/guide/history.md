@@ -20,9 +20,9 @@ shim to bind loopback by default, matching the container's own posture.
 
 An 18-day gap — the longest in the repo's history, from `9d4a946`
 (2026-08-31) to `773344a` (2026-09-18, a docs migration) — is broken five
-days later by the busiest stretch outside the bring-up itself: three
-commits on 2026-09-23 that trace back to one real incident, followed by a
-fourth the next day that writes it up in full.
+days later. What follows is the busiest stretch outside the bring-up
+itself: three commits on 2026-09-23 that trace back to one real incident,
+followed by a fourth the next day that writes it up in full.
 
 A customer holding a valid friend key could not create a paste. The
 service was healthy throughout and had already answered with the exact
@@ -42,25 +42,26 @@ anonymous caller) instead of a single line consistent with all three.
 
 `2ff82e4` (2026-09-24) is the postmortem: the actual root cause was that
 the running process simply had no `EDGE_AUTH_SECRET` at all, which pins
-every request to public regardless of whose key it carries — a plain
+every request to public regardless of whose key it carries. A plain
 restart fixed it immediately, and how the secret went missing was never
 explained. It also records three separate, confidently wrong diagnoses
-offered before anyone checked the running process's actual environment,
-kept deliberately because, per the commit, "the pattern is more reusable
-than the conclusion." Three issues came out of it, all still open: no
-sign-in prompt on a refused create (hadoku-privatebin#1), the possibility
-of failing closed forever after one boot-time secret miss
-(hadoku-privatebin#2), and no logging at all for a request that
-*succeeds* (hadoku-privatebin#3).
+offered before anyone checked the running process's actual environment.
+They are kept deliberately, per the commit: "the pattern is more reusable
+than the conclusion."
+
+Three issues came out of the incident, all still open: no sign-in prompt
+on a refused create (hadoku-privatebin#1), the possibility of failing
+closed forever after one boot-time secret miss (hadoku-privatebin#2), and
+no logging at all for a request that *succeeds* (hadoku-privatebin#3).
 
 ## Hardening the deploy
 
-Through October, the deploy itself gets safer: CI's install token moves to
+Through October, the deploy itself gets safer. CI's install token moves to
 one read at job time from the vault rather than a static secret
-(`a2eb889`), the redeploy trigger asks a management service for the
-redeploy instead of holding a broad token directly (`5d4908c`), and the
-docs are explicit that the live container and its `cfg/` now run from a
-separate deploy clone — never `~/repos` — because `docker compose`'s
+(`a2eb889`), and the redeploy trigger asks a management service for the
+redeploy instead of holding a broad token directly (`5d4908c`). The docs
+also become explicit that the live container and its `cfg/` now run from
+a separate deploy clone — never `~/repos` — because `docker compose`'s
 project name comes from the directory name alone (`bea751a`). `85d79cc`
 (2026-10-31) removes `EDGE_AUTH_SECRET` from the service key's own vault
 access entirely: the secret that makes the tier gate trustworthy is not

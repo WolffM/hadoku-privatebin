@@ -28,10 +28,10 @@ account for.
 ## Read is public, create is friend+
 
 **What it does.** The exact same URL serves two different rules depending
-on the HTTP method: any `GET` (reading a paste, or the server-side delete
-a burn-after-reading paste triggers on its own read) is open to anyone who
-has the link; any `POST`, `PUT` or `DELETE` (creating a paste, or deleting
-one by its own delete token) needs a signed-in **friend** account or
+on the HTTP method. Any `GET` — reading a paste, or the server-side delete
+a burn-after-reading paste triggers on its own read — is open to anyone who
+has the link. Any `POST`, `PUT` or `DELETE` — creating a paste, or deleting
+one by its own delete token — needs a signed-in **friend** account or
 higher.
 
 **How to use it.** Reading needs nothing — open the link. Creating needs to
@@ -40,18 +40,16 @@ the create button's request is refused with a message naming exactly what's
 missing, not a generic error.
 
 **What it does not do.** There is currently no prompt to sign in when a
-create is refused — PrivateBin's create happens over an XHR the login flow
-can't intercept, and the route is registered `public` at the platform edge
-(since the edge's tier rules are path-only and can't see the method), so
-the refusal is the end of the road for now rather than a redirect
+create is refused. PrivateBin's create happens over an XHR the login flow
+can't intercept, and the route is registered `public` at the platform edge,
+since the edge's tier rules are path-only and can't see the method. The
+refusal is the end of the road for now, rather than a redirect
 (hadoku-privatebin#1).
 
-Enforced by `CREATE_MIN_TIER = 'friend'` in `src/gate.ts:59`, checked by
-`mayProceed()` (`src/gate.ts:94`) against the tier the edge actually
-vouched for — never a header a client could simply assert — in the gate
-middleware at `src/index.ts:114`. The split itself was read directly off
+The gate checks the tier the edge actually vouched for, never a header a
+client could simply assert. The split itself was read directly off
 upstream's own router rather than guessed: see
-[contributing](contributing.md#the-gate) for where that mapping comes from.
+[contributing](contributing.md#the-gate) for exactly where that check runs.
 
 ## Themed, not forked
 
@@ -72,6 +70,6 @@ never in a modified copy of it.
 
 The theme injection is the only reason this shim buffers a response at
 all, and it buffers exactly one path on purpose: PrivateBin's document
-root, and nothing else, because every other response can be the full
-size limit and holding that in memory to rewrite it would defeat the
-point (`servesHtmlShell`, `src/index.ts`).
+root, and nothing else. Every other response can be the full size limit,
+and holding that in memory to rewrite it would defeat the point
+(`servesHtmlShell`, `src/index.ts`).
