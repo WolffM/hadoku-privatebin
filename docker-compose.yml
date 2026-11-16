@@ -9,7 +9,9 @@
 # services/pm2/privatebin-backend-wrapper.mjs): `up -d` on start, `down` on stop.
 # A push to main that changes this file or cfg/ restarts it after the shim
 # deploy (deploy-config `restartCompanions`, hadoku_site#534), which recreates
-# the container from the new definition. ./data survives every recreate.
+# the container from the new definition. The paste dir survives every recreate:
+# the wrapper sets PRIVATEBIN_DATA_DIR to this service's declared state dir
+# (hadoku_site scripts/child-apps.json `state`), outside the deploy clone.
 services:
   privatebin:
     # Pinned by digest, not by `:latest`. For a service holding secrets, "what
@@ -21,10 +23,10 @@ services:
     container_name: privatebin
     restart: unless-stopped
 
-    # Run as the host user that owns ./data, keeping the group the image's own
+    # Run as the host user that owns the paste dir, keeping the group the image's own
     # www-data (82) so php-fpm and nginx still share what they expect. The image
     # already runs unprivileged as nobody:www-data; the only thing that changes
-    # is which uid owns the pastes on the host — which is what makes ./data
+    # is which uid owns the pastes on the host — which is what makes it
     # readable for backup without root, and writable without chowning it to a
     # uid the operator cannot manage.
     user: '1000:82'
@@ -41,8 +43,10 @@ services:
 
     volumes:
       # Paste storage. PrivateBin's Filesystem model writes here; this is the
-      # only state that matters and the only thing worth backing up.
-      - ./data:/srv/data
+      # only state that matters and the only thing worth backing up. The
+      # ./data default is for a scratch run from a checkout; production always
+      # sets the variable.
+      - ${PRIVATEBIN_DATA_DIR:-./data}:/srv/data
 
       # Config, mounted rather than baked, so changing sizelimit or the notice
       # is a restart and not an image rebuild.

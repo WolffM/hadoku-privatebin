@@ -15,7 +15,7 @@ browser → edge-router (hadoku.me/privatebin/*) → privatebin.hadoku.me tunnel
 | ------------------ | ------------- | ---------------------------------------------------- |
 | Reverse-proxy shim | **this repo** | The gate. Loopback-only; cloudflared is the one way in. |
 | PrivateBin 2.0.6   | upstream      | `privatebin/nginx-fpm-alpine`, pinned by digest.     |
-| Paste storage      | host disk     | `./data`, bind-mounted. Gitignored. Back this up.    |
+| Paste storage      | host disk     | `PRIVATEBIN_DATA_DIR` (`~/srv-data/privatebin`), bind-mounted. Back this up. |
 
 ## The shim binds loopback, like the container
 
@@ -90,11 +90,11 @@ not come back fails the deploy. By hand: `POST /api/privatebin-backend/restart`
 through mgmt-api, never raw pm2 or docker.
 
 **Never `docker compose up` from `~/repos/hadoku-privatebin`.** Since 2026-10-21
-(hadoku-fleet-manager-private#43) the container, its `data/` (every paste) and the
-`cfg/` it mounts live in the deploy clone. The compose project name comes from
+(hadoku-fleet-manager-private#43) the container and the `cfg/` it mounts live in the deploy clone, and the
+pastes in `PRIVATEBIN_DATA_DIR`, which only the PM2 wrapper sets. The compose project name comes from
 the directory name, which is the same in both places, so compose run from the
-dev checkout would RECREATE the live container against `~/repos` — an empty
-`data/` there, and every paste reads as gone.
+dev checkout would RECREATE the live container against `~/repos` and its empty
+`./data` default, and every paste reads as gone.
 
 ## Vault
 

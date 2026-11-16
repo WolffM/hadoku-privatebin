@@ -89,9 +89,9 @@ ceiling. Preview policy still `none`.
 - **`services/pm2/privatebin-wrapper.mjs` is hand-edited** to pass
   `EDGE_AUTH_SECRET`. Re-running hydration drops that line, and the shim silently
   becomes read-only if it does. Noted in the file's own header.
-- **Back up `data/`.** It is the only state that matters, it holds the encrypted
-  blobs and the ServerSalt, and it is gitignored (it was not — committing it
-  would have published both).
+- **Back up the paste dir** (`PRIVATEBIN_DATA_DIR`, `~/srv-data/privatebin`). It
+  is the only state that matters and holds the encrypted blobs and the
+  ServerSalt. It lived in the clone as `data/` until hadoku_site#533.
 - **Checklist cleanup not done**: `templates/privatebin-tunnel/` and
   `docs/child-apps/CHECKLIST_privatebin.md` in hadoku_site are the checklist's own
   post-verification deletions. Skipped because other agents had live worktrees
