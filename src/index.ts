@@ -21,11 +21,13 @@
 
 import express from 'express';
 import { createProxyMiddleware, responseInterceptor } from 'http-proxy-middleware';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { CONFIG } from './config.js';
 import { sanitizeHeaders, effectiveTier } from './edge-auth.js';
 import { readCommit, probeBackend, healthResponse } from './health.js';
+import { drain, handoverFromEnv, listen, reportReady } from './handover.js';
 import { mayProceed, refusalBody, tooLargeBody, isJsonApiCall, CREATE_MIN_TIER } from './gate.js';
 
 // dist/index.js -> repo root, so `web/` resolves whatever the working directory.
@@ -264,23 +266,40 @@ app.use((req, res, next) => {
 	(shell ? htmlProxy : streamProxy)(req, res, next);
 });
 
-app.listen(CONFIG.port, CONFIG.bindHost, () => {
-	console.log(`[privatebin] shim listening on ${CONFIG.bindHost}:${CONFIG.port}`);
-	console.log(`[privatebin] ${CONFIG.basePrefix}/* -> ${CONFIG.backendUrl} (prefix stripped)`);
-	console.log(`[privatebin] create requires tier >= ${CREATE_MIN_TIER}; read is public`);
-	if (CONFIG.edgeAuthSecret === '') {
-		if (CONFIG.allowUnverifiedEdge) {
-			console.warn(
-				'[privatebin] WARNING: PRIVATEBIN_INSECURE_NO_EDGE_AUTH=1 — tier headers trusted ' +
-					'UNVERIFIED. Anyone who can reach this port can create pastes. Bare-local only.'
-			);
-		} else {
-			console.warn(
-				'[privatebin] WARNING: EDGE_AUTH_SECRET unset — failing closed: every request is ' +
-					'degraded to public, so NOTHING can be created. Wire EDGE_AUTH_SECRET via the vault.'
-			);
-		}
-	} else {
-		console.log('[privatebin] edge-auth provenance enforced (spoofed tier headers pinned to public)');
-	}
+// ── Listen: on the deploy supervisor's socket, or our own ──────────────────
+// handover.ts has the contract. A retiring generation lets requests it took
+// finish for DRAIN_GRACE_MS, then cuts them: a create upload is the longest.
+const DRAIN_GRACE_MS = 30_000;
+const server = createServer(app);
+const handover = handoverFromEnv();
+process.once('SIGTERM', () => {
+	const t0 = Date.now();
+	void drain(server, DRAIN_GRACE_MS).then(() => {
+		console.log(`[privatebin] retired in ${Date.now() - t0}ms`);
+		process.exit(0);
+	});
 });
+await listen(server, CONFIG.port, CONFIG.bindHost, handover?.listenFd ?? null);
+reportReady(handover);
+console.log(
+	handover
+		? '[privatebin] shim serving the handed-over socket'
+		: `[privatebin] shim listening on ${CONFIG.bindHost}:${CONFIG.port}`
+);
+console.log(`[privatebin] ${CONFIG.basePrefix}/* -> ${CONFIG.backendUrl} (prefix stripped)`);
+console.log(`[privatebin] create requires tier >= ${CREATE_MIN_TIER}; read is public`);
+if (CONFIG.edgeAuthSecret === '') {
+	if (CONFIG.allowUnverifiedEdge) {
+		console.warn(
+			'[privatebin] WARNING: PRIVATEBIN_INSECURE_NO_EDGE_AUTH=1 — tier headers trusted ' +
+				'UNVERIFIED. Anyone who can reach this port can create pastes. Bare-local only.'
+		);
+	} else {
+		console.warn(
+			'[privatebin] WARNING: EDGE_AUTH_SECRET unset — failing closed: every request is ' +
+				'degraded to public, so NOTHING can be created. Wire EDGE_AUTH_SECRET via the vault.'
+		);
+	}
+} else {
+	console.log('[privatebin] edge-auth provenance enforced (spoofed tier headers pinned to public)');
+}

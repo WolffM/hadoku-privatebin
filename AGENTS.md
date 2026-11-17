@@ -96,6 +96,22 @@ the directory name, which is the same in both places, so compose run from the
 dev checkout would RECREATE the live container against `~/repos` and its empty
 `./data` default, and every paste reads as gone.
 
+## Deploys hand over the socket
+
+hadoku_site's handover supervisor (`services/pm2/lib/handover.py`, deploy
+continuity's socket mover) holds 127.0.0.1:9005 open across deploys. A shim
+deploy starts the next generation on that socket, waits for it to report
+ready, then sends the old one SIGTERM, so no caller gets a 502 through the
+tunnel. `src/handover.ts` is the whole contract: serve `HADOKU_LISTEN_FD`,
+write one byte to `HADOKU_READY_FD` once accepting, and on SIGTERM stop
+accepting, finish what is in flight (30 s, then cut) and exit 0. Without
+those variables the shim binds its port as before.
+
+The shim holds no state, so generations overlap. The PrivateBin container
+(privatebin-backend) is not covered: a deploy that recreates it still has a
+gap on create and read, though `/health` answers throughout.
+`src/__tests__/handover.test.ts` plays the supervisor with real processes.
+
 ## Vault
 
 `PRIVATEBIN_PORT`, `PRIVATEBIN_BACKEND_URL` and `EDGE_AUTH_SECRET` come from the
