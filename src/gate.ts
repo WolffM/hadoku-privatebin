@@ -42,17 +42,18 @@
 
 /**
  * Canonical ordering, mirrored from hadoku_site workers/shared/auth.ts
- * (`TIER_RANK`). `member` is a self-signed-up account, between public and
- * friend. COMPLETE: every tier the platform assigns must be named here, or an
+ * (`TIER_RANK`). `guest` is a self-signed-up account and `member` a guest the
+ * operator verified, both between public and friend. COMPLETE: every tier the platform assigns must be named here, or an
  * unknown name ranks as public via the `?? TIER_RANK.public` fallbacks below.
  */
 export const TIER_RANK: Record<string, number> = {
 	public: 0,
-	member: 1,
-	friend: 2,
-	service: 3,
-	wife: 4,
-	admin: 5,
+	guest: 1,
+	member: 2,
+	friend: 3,
+	service: 4,
+	wife: 5,
+	admin: 6,
 };
 
 /** Minimum tier permitted to create (or otherwise mutate) a paste. */

@@ -38,7 +38,7 @@ describe('creating is friend+', () => {
 	});
 
 	// Derived from TIER_RANK itself, not a hand-typed list: every non-public
-	// tier the ladder names is asserted, including `member` (refused — create
+	// tier the ladder names is asserted, including `guest` and `member` (refused — create
 	// stays friend+) — and a tier added to the ladder later is covered here
 	// without anyone editing this test.
 	it.each(Object.keys(TIER_RANK).filter((t) => t !== 'public'))(
@@ -76,10 +76,16 @@ describe('creating is friend+', () => {
 });
 
 describe('the ladder is complete', () => {
-	it('ranks every platform tier, member included, strictly above the one below it', () => {
-		expect(TIER_RANK).toMatchObject({ public: 0, member: 1, friend: 2 });
-		expect(TIER_RANK.member).toBeGreaterThan(TIER_RANK.public);
-		expect(TIER_RANK.friend).toBeGreaterThan(TIER_RANK.member);
+	it('is the complete platform ladder, each tier strictly above the one below it', () => {
+		// Pinned literally: the it.each above reads tiers FROM this object, so a
+		// tier dropped from it would stop being tested rather than fail.
+		expect(TIER_RANK).toEqual({ public: 0, guest: 1, member: 2, friend: 3, service: 4, wife: 5, admin: 6 });
+	});
+
+	it('refuses a guest create with the same verdict as a member, and lets a guest read', () => {
+		expect(mayProceed('POST', 'guest')).toBe(false);
+		expect(mayProceed('POST', 'member')).toBe(false);
+		expect(mayProceed('GET', 'guest')).toBe(true);
 	});
 });
 
