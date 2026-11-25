@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# vitest's JSON report, read by CI's report-tests step.
+reports/
 *.log
 
 # Service-tier vault key (mode 0600) — minted per-repo, NEVER committed.

@@ -74,7 +74,9 @@ docker-compose.yml  the pinned, by-digest upstream image; loopback-only port
 ## Tests and gates
 
 `pnpm check` (lint, typecheck, `vitest run`) is the CI gate, run on every
-push and PR. `src/__tests__/gate.test.ts` pins the whole read/create split,
+push and PR. CI then posts every test's outcome (vitest's JSON report,
+`reports/vitest.json`) to the fleet test store with `report-tests`, red runs
+included. `src/__tests__/gate.test.ts` pins the whole read/create split,
 including the tier ladder; `src/__tests__/health.test.ts` covers the health
 contract.
 
